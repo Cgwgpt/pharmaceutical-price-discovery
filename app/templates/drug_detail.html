@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}{{ drug.name }} - 药品详情{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">首页</a></li>
+                <li class="breadcrumb-item active">{{ drug.name }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<!-- 药品信息 -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">💊 {{ drug.name }}</h4>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <th width="100">规格</th>
+                        <td>{{ drug.specification or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>剂型</th>
+                        <td>{{ drug.dosage_form or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>生产厂家</th>
+                        <td>{{ drug.manufacturer or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>录入时间</th>
+                        <td>{{ drug.created_at[:10] if drug.created_at else '-' }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                {% if prices %}
+                <h2 class="price-low">¥{{ "%.2f"|format(prices[0].price) }}</h2>
+                <p class="text-muted">最低价 / {{ prices[0].source_name }}</p>
+                {% else %}
+                <p class="text-muted">暂无价格</p>
+                {% endif %}
+                <a href="{{ url_for('main.compare') }}?drug={{ drug.name }}" class="btn btn-primary">
+                    查看比价
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 采购建议 -->
+{% if recommendation %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">🎯 采购建议</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 text-center">
+                        <h3>{{ recommendation.overall_score }}</h3>
+                        <p class="text-muted">综合评分</p>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h3>{{ recommendation.stability_analysis.stability_level }}</h3>
+                        <p class="text-muted">价格稳定性</p>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h3>{{ recommendation.price_analysis.diff_percent }}%</h3>
+                        <p class="text-muted">价差幅度</p>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h3>{{ recommendation.best_channel.source }}</h3>
+                        <p class="text-muted">推荐渠道</p>
+                    </div>
+                </div>
+                <hr>
+                <h6>建议：</h6>
+                <ul class="mb-0">
+                    {% for rec in recommendation.recommendations %}
+                    <li class="{% if rec.priority == 'high' %}text-danger{% elif rec.priority == 'medium' %}text-warning{% endif %}">
+                        {{ rec.message }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 各平台价格 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">📊 各平台价格</h5>
+            </div>
+            <div class="card-body">
+                {% if prices %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>来源</th>
+                                <th>价格</th>
+                                <th>更新时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in prices %}
+                            <tr {% if loop.first %}class="table-success"{% endif %}>
+                                <td>{{ p.source_name }}</td>
+                                <td class="{% if loop.first %}price-low{% endif %}">
+                                    ¥{{ "%.2f"|format(p.price) }}
+                                    {% if loop.first %}<span class="badge bg-success">最低</span>{% endif %}
+                                </td>
+                                <td>{{ p.crawled_at[:10] if p.crawled_at else '-' }}</td>
+                                <td>
+                                    <a href="{{ p.source_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        查看
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center">暂无价格数据</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 价格历史 -->
+{% if history %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">📈 价格历史（近30天）</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="priceChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if history %}
+<script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+const ctx = document.getElementById('priceChart').getContext('2d');
+const history = {{ history | tojson }};
+
+const labels = history.map(h => h.crawled_at.slice(0, 10));
+const data = history.map(h => h.price);
+
+new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: '价格',
+            data: data,
+            borderColor: 'rgb(75, 192, 192)',
+            tension: 0.1,
+            fill: false
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            y: {
+                beginAtZero: false,
+                ticks: {
+                    callback: function(value) {
+                        return '¥' + value.toFixed(2);
+                    }
+                }
+            }
+        }
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

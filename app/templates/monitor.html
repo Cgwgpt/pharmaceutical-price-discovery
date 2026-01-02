@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block title %}价格监控中心 - 医药价格发现系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h4>📡 价格监控中心</h4>
+        <p class="text-muted">实时监控药品价格变动，发现最佳采购时机</p>
+    </div>
+</div>
+
+<!-- 采购机会提醒 -->
+{% if summary.price_down_count > 0 %}
+<div class="alert alert-success mb-4">
+    <h5 class="alert-heading">💰 采购机会提醒</h5>
+    <p class="mb-0">
+        发现 <strong>{{ summary.price_down_count }}</strong> 个药品价格下降，
+        建议关注并考虑采购！
+    </p>
+</div>
+{% endif %}
+
+<!-- 监控概览 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3>{{ summary.crawled_count }}</h3>
+                <p class="mb-0">今日更新</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3>{{ summary.price_down_count }}</h3>
+                <p class="mb-0">🔻 降价药品</p>
+                <small>采购良机</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h3>{{ summary.price_up_count }}</h3>
+                <p class="mb-0">🔺 涨价药品</p>
+                <small>关注库存</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>{{ summary.alert_count }}</h3>
+                <p class="mb-0">价格波动</p>
+                <small>超过阈值</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 降价药品 - 采购机会 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">💰 降价药品 - 采购机会</h5>
+            </div>
+            <div class="card-body">
+                {% set down_alerts = alerts | selectattr('direction', 'equalto', 'down') | list %}
+                {% if down_alerts %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>药品名称</th>
+                                <th>规格</th>
+                                <th>原价</th>
+                                <th>现价</th>
+                                <th>降幅</th>
+                                <th>节省金额</th>
+                                <th>采购建议</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in down_alerts[:20] %}
+                            {% set savings = alert.previous_price - alert.current_price %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('main.drug_detail', drug_id=alert.drug_id) }}">
+                                        {{ alert.drug_name[:25] }}{% if alert.drug_name|length > 25 %}...{% endif %}
+                                    </a>
+                                </td>
+                                <td>{{ alert.specification or '-' }}</td>
+                                <td class="text-muted"><del>¥{{ "%.2f"|format(alert.previous_price) }}</del></td>
+                                <td class="text-success fw-bold">¥{{ "%.2f"|format(alert.current_price) }}</td>
+                                <td>
+                                    <span class="badge bg-success">↓ {{ "%.1f"|format(alert.change_percent|abs) }}%</span>
+                                </td>
+                                <td class="text-success">¥{{ "%.2f"|format(savings) }}/件</td>
+                                <td>
+                                    {% if alert.change_percent|abs >= 10 %}
+                                    <span class="badge bg-danger">强烈建议采购</span>
+                                    {% elif alert.change_percent|abs >= 5 %}
+                                    <span class="badge bg-warning text-dark">建议采购</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">可考虑</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('main.compare') }}?drug={{ alert.drug_name }}" 
+                                       class="btn btn-sm btn-outline-primary">比价</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">暂无降价药品</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 涨价预警 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">⚠️ 涨价预警 - 关注库存</h5>
+            </div>
+            <div class="card-body">
+                {% set up_alerts = alerts | selectattr('direction', 'equalto', 'up') | list %}
+                {% if up_alerts %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>药品名称</th>
+                                <th>规格</th>
+                                <th>原价</th>
+                                <th>现价</th>
+                                <th>涨幅</th>
+                                <th>增加成本</th>
+                                <th>建议</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in up_alerts[:20] %}
+                            {% set extra_cost = alert.current_price - alert.previous_price %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('main.drug_detail', drug_id=alert.drug_id) }}">
+                                        {{ alert.drug_name[:25] }}{% if alert.drug_name|length > 25 %}...{% endif %}
+                                    </a>
+                                </td>
+                                <td>{{ alert.specification or '-' }}</td>
+                                <td class="text-muted">¥{{ "%.2f"|format(alert.previous_price) }}</td>
+                                <td class="text-danger fw-bold">¥{{ "%.2f"|format(alert.current_price) }}</td>
+                                <td>
+                                    <span class="badge bg-danger">↑ {{ "%.1f"|format(alert.change_percent|abs) }}%</span>
+                                </td>
+                                <td class="text-danger">+¥{{ "%.2f"|format(extra_cost) }}/件</td>
+                                <td>
+                                    {% if alert.change_percent|abs >= 10 %}
+                                    <span class="badge bg-danger">检查库存</span>
+                                    {% elif alert.change_percent|abs >= 5 %}
+                                    <span class="badge bg-warning text-dark">关注走势</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">正常波动</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('main.compare') }}?drug={{ alert.drug_name }}" 
+                                       class="btn btn-sm btn-outline-primary">比价</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">暂无涨价预警</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 采购建议汇总 -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">📋 采购建议汇总</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    {% set down_alerts = alerts | selectattr('direction', 'equalto', 'down') | list %}
+                    {% set strong_buy = down_alerts | selectattr('change_percent', 'lt', -10) | list %}
+                    {% set suggest_buy = down_alerts | selectattr('change_percent', 'lt', -5) | selectattr('change_percent', 'ge', -10) | list %}
+                    
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>🔥 强烈建议采购（降幅≥10%）</span>
+                        <span class="badge bg-danger rounded-pill">{{ strong_buy|length }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>👍 建议采购（降幅5-10%）</span>
+                        <span class="badge bg-warning text-dark rounded-pill">{{ suggest_buy|length }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>📦 可考虑采购（降幅<5%）</span>
+                        <span class="badge bg-secondary rounded-pill">{{ (down_alerts|length) - (strong_buy|length) - (suggest_buy|length) }}</span>
+                    </li>
+                </ul>
+                
+                {% if strong_buy %}
+                <div class="mt-3">
+                    <h6>🔥 强烈建议采购：</h6>
+                    <ul class="small">
+                        {% for alert in strong_buy[:5] %}
+                        <li>{{ alert.drug_name }} - 降价 {{ "%.1f"|format(alert.change_percent|abs) }}%</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">📈 价格波动最大的药品</h5>
+            </div>
+            <div class="card-body">
+                {% if alerts %}
+                <ul class="list-group list-group-flush">
+                    {% for alert in alerts[:8] %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <a href="{{ url_for('main.compare') }}?drug={{ alert.drug_name }}" class="text-decoration-none">
+                                {{ alert.drug_name[:20] }}{% if alert.drug_name|length > 20 %}...{% endif %}
+                            </a>
+                            <br>
+                            <small class="text-muted">{{ alert.specification or '-' }}</small>
+                        </div>
+                        <div class="text-end">
+                            {% if alert.direction == 'down' %}
+                            <span class="badge bg-success">↓ {{ "%.1f"|format(alert.change_percent|abs) }}%</span>
+                            <br><small class="text-success">¥{{ "%.2f"|format(alert.current_price) }}</small>
+                            {% else %}
+                            <span class="badge bg-danger">↑ {{ "%.1f"|format(alert.change_percent|abs) }}%</span>
+                            <br><small class="text-danger">¥{{ "%.2f"|format(alert.current_price) }}</small>
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center">暂无价格波动数据</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 监控设置 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">⚙️ 监控设置</h5>
+            </div>
+            <div class="card-body">
+                <form id="monitorForm" class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">价格变动阈值 (%)</label>
+                        <input type="number" class="form-control" id="threshold" 
+                               value="{{ threshold or 5 }}" min="1" max="50">
+                        <small class="text-muted">价格变动超过此百分比时显示</small>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">重点监控药品</label>
+                        <textarea class="form-control" id="watchList" rows="2" 
+                                  placeholder="输入药品名称，每行一个">{{ watch_list | join('\n') if watch_list else '' }}</textarea>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">保存设置</button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" onclick="location.reload()">刷新数据</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('monitorForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const threshold = document.getElementById('threshold').value;
+    const watchList = document.getElementById('watchList').value;
+    
+    localStorage.setItem('monitor_threshold', threshold);
+    localStorage.setItem('monitor_watch_list', watchList);
+    
+    // 跳转到新阈值
+    window.location.href = '{{ url_for("main.monitor") }}?threshold=' + threshold;
+});
+
+window.onload = function() {
+    const savedThreshold = localStorage.getItem('monitor_threshold');
+    const savedWatchList = localStorage.getItem('monitor_watch_list');
+    
+    if (savedThreshold) {
+        document.getElementById('threshold').value = savedThreshold;
+    }
+    if (savedWatchList) {
+        document.getElementById('watchList').value = savedWatchList;
+    }
+};
+</script>
+{% endblock %}

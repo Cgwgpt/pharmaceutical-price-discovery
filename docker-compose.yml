@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  pharma-app:
+    build: .
+    container_name: pharma-price-discovery
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=your-secret-key-change-this
+      - DATABASE_URL=sqlite:///data/pharma_prices.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 可选：如果需要使用PostgreSQL数据库
+  # postgres:
+  #   image: postgres:15
+  #   container_name: pharma-postgres
+  #   environment:
+  #     POSTGRES_DB: pharma_prices
+  #     POSTGRES_USER: pharma_user
+  #     POSTGRES_PASSWORD: pharma_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
+
+# volumes:
+#   postgres_data:

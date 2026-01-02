@@ -1,0 +1,28 @@
+# Web框架
+Flask>=2.3.0
+
+# 数据库ORM
+SQLAlchemy>=2.0.0
+
+# 爬虫框架
+Scrapy>=2.11.0
+itemadapter>=0.8.0
+
+# 定时任务
+APScheduler>=3.10.0
+
+# 测试框架
+pytest>=7.4.0
+hypothesis>=6.92.0
+
+# HTTP请求
+requests>=2.31.0
+
+# 浏览器自动化（用于自动登录获取Token）
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+
+# 数据库驱动
+# SQLite内置于Python，无需额外安装
+# 如需PostgreSQL支持，取消下行注释
+# psycopg2-binary>=2.9.0

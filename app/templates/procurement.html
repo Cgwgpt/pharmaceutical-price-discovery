@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+
+{% block title %}采购建议 - 医药价格发现系统{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">
+        <i class="bi bi-cart-check"></i> 采购建议
+    </h2>
+    
+    <!-- 采购查询表单 -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-search"></i> 查询采购建议
+        </div>
+        <div class="card-body">
+            <form id="procurementForm" class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label">药品名称</label>
+                    <input type="text" class="form-control" id="drugName" 
+                           placeholder="输入药品名称，如：片仔癀" value="{{ drug_name or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">药品ID（可选）</label>
+                    <input type="number" class="form-control" id="drugId" 
+                           placeholder="如：138595" value="{{ drug_id or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">采购数量</label>
+                    <input type="number" class="form-control" id="quantity" 
+                           value="{{ quantity or 1 }}" min="1">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="bi bi-search"></i> 查询建议
+                    </button>
+                    <button type="button" class="btn btn-success" id="crawlBtn">
+                        <i class="bi bi-cloud-download"></i> 采集最新价格
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 采集状态 -->
+    <div id="crawlStatus" class="alert alert-info d-none">
+        <i class="bi bi-hourglass-split"></i> <span id="crawlMessage">正在采集...</span>
+    </div>
+    
+    {% if recommendation %}
+    <!-- 采购建议结果 -->
+    <div class="row">
+        <!-- 综合评分 -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-speedometer2"></i> 综合评分
+                </div>
+                <div class="card-body text-center">
+                    <div class="display-1 mb-3 
+                        {% if recommendation.overall_score >= 80 %}text-success
+                        {% elif recommendation.overall_score >= 60 %}text-warning
+                        {% else %}text-danger{% endif %}">
+                        {{ recommendation.overall_score }}
+                    </div>
+                    <p class="lead">{{ recommendation.timing_advice.advice }}</p>
+                    <p class="text-muted">{{ recommendation.timing_advice.reason }}</p>
+                    <span class="badge 
+                        {% if recommendation.timing_advice.urgency == 'high' %}bg-danger
+                        {% elif recommendation.timing_advice.urgency == 'medium' %}bg-warning
+                        {% else %}bg-success{% endif %} fs-6">
+                        {% if recommendation.timing_advice.urgency == 'high' %}紧急
+                        {% elif recommendation.timing_advice.urgency == 'medium' %}建议
+                        {% else %}正常{% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 最优渠道 -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-trophy"></i> 最优采购渠道
+                </div>
+                <div class="card-body">
+                    <h4 class="text-success">{{ recommendation.best_channel.source }}</h4>
+                    <div class="display-4 text-success mb-3">
+                        ¥{{ "%.2f"|format(recommendation.best_channel.price) }}
+                    </div>
+                    {% if recommendation.best_channel.url %}
+                    <a href="{{ recommendation.best_channel.url }}" target="_blank" 
+                       class="btn btn-outline-success">
+                        <i class="bi bi-box-arrow-up-right"></i> 前往采购
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- 节省金额 -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-warning">
+                    <i class="bi bi-piggy-bank"></i> 节省金额
+                </div>
+                <div class="card-body">
+                    {% if recommendation.savings_analysis %}
+                    <div class="mb-3">
+                        <small class="text-muted">采购 {{ recommendation.quantity }} 单位</small>
+                        <div class="display-5 text-warning">
+                            节省 ¥{{ "%.2f"|format(recommendation.savings_analysis.total_savings) }}
+                        </div>
+                        <small class="text-muted">
+                            相比最高价节省 {{ recommendation.savings_analysis.savings_percent }}%
+                        </small>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <small class="text-muted">最优总价</small>
+                            <div class="h5 text-success">¥{{ "%.2f"|format(recommendation.savings_analysis.total_best_cost) }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">最高总价</small>
+                            <div class="h5 text-danger">¥{{ "%.2f"|format(recommendation.savings_analysis.total_current_cost) }}</div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="text-muted">暂无节省数据</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- 价格分析 -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <i class="bi bi-graph-up"></i> 价格分析
+                </div>
+                <div class="card-body">
+                    <table class="table">
+                        <tr>
+                            <td>最低价</td>
+                            <td class="text-success fw-bold">¥{{ "%.2f"|format(recommendation.price_analysis.lowest) }}</td>
+                        </tr>
+                        <tr>
+                            <td>最高价</td>
+                            <td class="text-danger">¥{{ "%.2f"|format(recommendation.price_analysis.highest) }}</td>
+                        </tr>
+                        <tr>
+                            <td>平均价</td>
+                            <td>¥{{ "%.2f"|format(recommendation.price_analysis.average) }}</td>
+                        </tr>
+                        <tr>
+                            <td>价差</td>
+                            <td>{{ recommendation.price_analysis.diff_percent }}%</td>
+                        </tr>
+                        <tr>
+                            <td>供应商数</td>
+                            <td>{{ recommendation.price_analysis.source_count }} 家</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 稳定性分析 -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <i class="bi bi-shield-check"></i> 价格稳定性
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>稳定性评分</span>
+                            <span>{{ recommendation.stability_analysis.stability_score }}/100</span>
+                        </div>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar 
+                                {% if recommendation.stability_analysis.stability_score >= 80 %}bg-success
+                                {% elif recommendation.stability_analysis.stability_score >= 50 %}bg-warning
+                                {% else %}bg-danger{% endif %}" 
+                                 style="width: {{ recommendation.stability_analysis.stability_score }}%">
+                                {{ recommendation.stability_analysis.stability_level }}
+                            </div>
+                        </div>
+                    </div>
+                    <table class="table table-sm">
+                        <tr>
+                            <td>波动率</td>
+                            <td>{{ "%.1f"|format(recommendation.stability_analysis.volatility) }}%</td>
+                        </tr>
+                        <tr>
+                            <td>价格趋势</td>
+                            <td>
+                                {% if recommendation.stability_analysis.trend == 'rising' %}
+                                <span class="text-danger"><i class="bi bi-arrow-up"></i> 上涨</span>
+                                {% elif recommendation.stability_analysis.trend == 'falling' %}
+                                <span class="text-success"><i class="bi bi-arrow-down"></i> 下降</span>
+                                {% else %}
+                                <span class="text-muted"><i class="bi bi-dash"></i> 平稳</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 采购建议列表 -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-lightbulb"></i> 采购建议
+        </div>
+        <div class="card-body">
+            {% for rec in recommendation.recommendations %}
+            <div class="alert 
+                {% if rec.priority == 'high' %}alert-danger
+                {% elif rec.priority == 'medium' %}alert-warning
+                {% elif rec.priority == 'info' %}alert-info
+                {% else %}alert-success{% endif %} mb-2">
+                <i class="bi 
+                    {% if rec.type == 'price' %}bi-currency-dollar
+                    {% elif rec.type == 'stability' %}bi-shield
+                    {% elif rec.type == 'trend' %}bi-graph-up
+                    {% elif rec.type == 'bulk' %}bi-box-seam
+                    {% else %}bi-info-circle{% endif %}"></i>
+                {{ rec.message }}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    {% endif %}
+    
+    <!-- 供应商价格列表 -->
+    {% if provider_prices %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-list-ol"></i> 供应商价格明细（{{ provider_prices|length }} 家）
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>供应商</th>
+                            <th>价格</th>
+                            <th>与最低价差</th>
+                            <th>建议</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set min_price = provider_prices[0].price if provider_prices else 0 %}
+                        {% for p in provider_prices %}
+                        <tr class="{% if loop.index == 1 %}table-success{% endif %}">
+                            <td>{{ loop.index }}</td>
+                            <td>{{ p.provider_name }}</td>
+                            <td class="{% if loop.index == 1 %}text-success fw-bold{% endif %}">
+                                ¥{{ "%.2f"|format(p.price) }}
+                            </td>
+                            <td>
+                                {% if p.price > min_price %}
+                                <span class="text-danger">+¥{{ "%.2f"|format(p.price - min_price) }}</span>
+                                <small class="text-muted">(+{{ "%.1f"|format((p.price - min_price) / min_price * 100) }}%)</small>
+                                {% else %}
+                                <span class="badge bg-success">最低价</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if loop.index == 1 %}
+                                <span class="badge bg-success">推荐</span>
+                                {% elif (p.price - min_price) / min_price * 100 < 5 %}
+                                <span class="badge bg-info">可选</span>
+                                {% else %}
+                                <span class="badge bg-secondary">备选</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- 最佳采购机会 -->
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-star"></i> 最佳采购机会（价差最大的药品）
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="opportunitiesTable">
+                    <thead>
+                        <tr>
+                            <th>药品名称</th>
+                            <th>最低价</th>
+                            <th>最高价</th>
+                            <th>价差</th>
+                            <th>最优渠道</th>
+                            <th>稳定性</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="7" class="text-center">
+                                <button class="btn btn-outline-primary" onclick="loadOpportunities()">
+                                    <i class="bi bi-arrow-clockwise"></i> 加载采购机会
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 表单提交
+document.getElementById('procurementForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const drugName = document.getElementById('drugName').value.trim();
+    const drugId = document.getElementById('drugId').value.trim();
+    const quantity = document.getElementById('quantity').value || 1;
+    
+    if (!drugName) {
+        alert('请输入药品名称');
+        return;
+    }
+    
+    let url = `/procurement?drug=${encodeURIComponent(drugName)}&quantity=${quantity}`;
+    if (drugId) {
+        url += `&drug_id=${drugId}`;
+    }
+    window.location.href = url;
+});
+
+// 采集最新价格
+document.getElementById('crawlBtn').addEventListener('click', async function() {
+    const drugName = document.getElementById('drugName').value.trim();
+    const drugId = document.getElementById('drugId').value.trim();
+    
+    if (!drugName) {
+        alert('请输入药品名称');
+        return;
+    }
+    
+    const statusDiv = document.getElementById('crawlStatus');
+    const messageSpan = document.getElementById('crawlMessage');
+    
+    statusDiv.classList.remove('d-none', 'alert-success', 'alert-danger');
+    statusDiv.classList.add('alert-info');
+    messageSpan.innerHTML = '<i class="bi bi-hourglass-split"></i> 正在采集供应商价格，请稍候...';
+    
+    try {
+        const response = await fetch('/api/crawl/playwright', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                keyword: drugName,
+                drug_id: drugId ? parseInt(drugId) : null
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.code === 0 && result.data.success) {
+            statusDiv.classList.remove('alert-info');
+            statusDiv.classList.add('alert-success');
+            messageSpan.innerHTML = `<i class="bi bi-check-circle"></i> 采集完成！找到 ${result.data.total_found} 个供应商，保存 ${result.data.saved_count} 条记录`;
+            
+            // 刷新页面显示最新数据
+            setTimeout(() => {
+                const quantity = document.getElementById('quantity').value || 1;
+                let url = `/procurement?drug=${encodeURIComponent(drugName)}&quantity=${quantity}`;
+                if (drugId) url += `&drug_id=${drugId}`;
+                window.location.href = url;
+            }, 2000);
+        } else {
+            statusDiv.classList.remove('alert-info');
+            statusDiv.classList.add('alert-danger');
+            messageSpan.innerHTML = `<i class="bi bi-x-circle"></i> 采集失败: ${result.data?.error || result.message}`;
+        }
+    } catch (error) {
+        statusDiv.classList.remove('alert-info');
+        statusDiv.classList.add('alert-danger');
+        messageSpan.innerHTML = `<i class="bi bi-x-circle"></i> 请求失败: ${error.message}`;
+    }
+});
+
+// 加载采购机会
+async function loadOpportunities() {
+    const tbody = document.querySelector('#opportunitiesTable tbody');
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center"><i class="bi bi-hourglass-split"></i> 加载中...</td></tr>';
+    
+    try {
+        const response = await fetch('/api/recommendation/opportunities?limit=10');
+        const result = await response.json();
+        
+        if (result.code === 0 && result.data.length > 0) {
+            tbody.innerHTML = result.data.map(item => `
+                <tr>
+                    <td>${item.drug_name}</td>
+                    <td class="text-success">¥${item.lowest_price.toFixed(2)}</td>
+                    <td class="text-danger">¥${item.highest_price.toFixed(2)}</td>
+                    <td><span class="badge bg-warning">${item.diff_percent.toFixed(1)}%</span></td>
+                    <td>${item.best_source}</td>
+                    <td>
+                        <span class="badge ${item.stability_score >= 80 ? 'bg-success' : item.stability_score >= 50 ? 'bg-warning' : 'bg-danger'}">
+                            ${item.stability_level}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="/procurement?drug=${encodeURIComponent(item.drug_name)}" class="btn btn-sm btn-outline-primary">
+                            查看建议
+                        </a>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无数据</td></tr>';
+        }
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">加载失败: ${error.message}</td></tr>`;
+    }
+}
+</script>
+{% endblock %}

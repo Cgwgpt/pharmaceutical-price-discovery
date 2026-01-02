@@ -1,0 +1,4 @@
+# file: /Users/chenguowen/ypjgjc/app/__init__.py
+# hypothesis_version: 6.148.8
+
+['/api', 'ENABLE_SCHEDULER', 'SECRET_KEY', 'default']

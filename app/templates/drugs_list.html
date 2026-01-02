@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}已采集药品列表 - 医药价格发现系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2>📚 药品库</h2>
+        <p class="text-muted">浏览和搜索所有已采集的药品</p>
+    </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3>{{ total }}</h3>
+                <small>药品总数</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3>{{ drugs|selectattr('price_count')|sum(attribute='price_count') }}</h3>
+                <small>价格记录总数</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>{{ page }}</h3>
+                <small>当前页</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body text-center">
+                <h3>{{ pages }}</h3>
+                <small>总页数</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 搜索和视图切换 -->
+<div class="row mb-3">
+    <div class="col-md-8 mb-2 mb-md-0">
+        <form action="{{ url_for('main.drugs_list') }}" method="get" class="d-flex">
+            <input type="text" 
+                   name="q" 
+                   class="form-control me-2" 
+                   placeholder="搜索药品名称、厂家或规格..." 
+                   value="{{ keyword or '' }}"
+                   autofocus>
+            <input type="hidden" name="sort" value="{{ sort_by }}">
+            <input type="hidden" name="view" value="{{ view_mode }}">
+            <button type="submit" class="btn btn-primary">
+                🔍 搜索
+            </button>
+            {% if keyword %}
+            <a href="{{ url_for('main.drugs_list', sort=sort_by, view=view_mode) }}" class="btn btn-outline-secondary ms-2">
+                ✕ 清除
+            </a>
+            {% endif %}
+        </form>
+    </div>
+    <div class="col-md-4">
+        <div class="btn-group float-md-end w-100" role="group">
+            <a href="{{ url_for('main.drugs_list', sort=sort_by, q=keyword, view='table') }}" 
+               class="btn btn-sm {{ 'btn-primary' if view_mode == 'table' else 'btn-outline-primary' }}"
+               title="表格视图">
+                📊 表格
+            </a>
+            <a href="{{ url_for('main.drugs_list', sort=sort_by, q=keyword, view='card') }}" 
+               class="btn btn-sm {{ 'btn-primary' if view_mode == 'card' else 'btn-outline-primary' }}"
+               title="卡片视图">
+                🎴 卡片
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- 排序选项 -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="btn-group" role="group">
+            <a href="{{ url_for('main.drugs_list', sort='updated', page=1, q=keyword, view=view_mode) }}" 
+               class="btn btn-sm {{ 'btn-primary' if sort_by == 'updated' else 'btn-outline-primary' }}">
+                🕒 最近更新
+            </a>
+            <a href="{{ url_for('main.drugs_list', sort='name', page=1, q=keyword, view=view_mode) }}" 
+               class="btn btn-sm {{ 'btn-primary' if sort_by == 'name' else 'btn-outline-primary' }}">
+                🔤 按名称
+            </a>
+            <a href="{{ url_for('main.drugs_list', sort='price_count', page=1, q=keyword, view=view_mode) }}" 
+               class="btn btn-sm {{ 'btn-primary' if sort_by == 'price_count' else 'btn-outline-primary' }}">
+                📊 按价格数量
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if keyword %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="alert alert-info mb-0">
+            <strong>🔍 搜索结果：</strong>找到 {{ total }} 个包含 "{{ keyword }}" 的药品
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 药品列表 -->
+<div class="row">
+    <div class="col-12">
+        {% if view_mode == 'card' %}
+        <!-- 卡片视图 -->
+        <div class="row">
+            {% if drugs %}
+                {% for drug in drugs %}
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card card-hover h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <a href="{{ url_for('main.drug_detail', drug_id=drug.id) }}" class="text-decoration-none">
+                                    {{ drug.name }}
+                                </a>
+                            </h5>
+                            <p class="card-text text-muted">
+                                {% if drug.specification %}
+                                <small>📦 规格：{{ drug.specification }}</small><br>
+                                {% endif %}
+                                {% if drug.manufacturer %}
+                                <small>🏭 厂家：{{ drug.manufacturer[:30] }}{% if drug.manufacturer|length > 30 %}...{% endif %}</small><br>
+                                {% endif %}
+                                <small>📊 价格数量：<span class="badge bg-primary">{{ drug.price_count }}</span></small>
+                            </p>
+                            {% if drug.min_price and drug.max_price %}
+                            <p class="card-text">
+                                <span class="text-success fw-bold">¥{{ "%.2f"|format(drug.min_price) }}</span>
+                                ~
+                                <span class="text-danger">¥{{ "%.2f"|format(drug.max_price) }}</span>
+                            </p>
+                            {% else %}
+                            <p class="card-text text-muted">暂无价格</p>
+                            {% endif %}
+                            {% if drug.last_crawled %}
+                            <p class="card-text">
+                                <small class="text-muted">🕒 {{ drug.last_crawled[:16] }}</small>
+                            </p>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer bg-transparent">
+                            <a href="{{ url_for('main.drug_detail', drug_id=drug.id) }}" class="btn btn-sm btn-primary">
+                                查看详情
+                            </a>
+                            <a href="{{ url_for('main.compare') }}?drug={{ drug.name }}" class="btn btn-sm btn-outline-secondary">
+                                比价
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12 text-center py-5">
+                    <p class="text-muted">
+                        {% if keyword %}
+                        未找到包含 "{{ keyword }}" 的药品
+                        {% else %}
+                        暂无药品数据，请先<a href="{{ url_for('main.crawl') }}">采集药品</a>
+                        {% endif %}
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <!-- 表格视图 -->
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th style="width: 5%;">ID</th>
+                                <th style="width: 35%;">药品名称</th>
+                                <th style="width: 15%;">规格</th>
+                                <th style="width: 10%;">价格数量</th>
+                                <th style="width: 15%;">价格范围</th>
+                                <th style="width: 15%;">最后采集</th>
+                                <th style="width: 5%;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if drugs %}
+                                {% for drug in drugs %}
+                                <tr>
+                                    <td>{{ drug.id }}</td>
+                                    <td>
+                                        <strong>{{ drug.name }}</strong>
+                                        {% if drug.manufacturer %}
+                                        <br><small class="text-muted">{{ drug.manufacturer }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ drug.specification or '-' }}</td>
+                                    <td>
+                                        <span class="badge bg-primary">{{ drug.price_count }}</span>
+                                    </td>
+                                    <td>
+                                        {% if drug.min_price and drug.max_price %}
+                                            <span class="text-success">¥{{ "%.2f"|format(drug.min_price) }}</span>
+                                            ~
+                                            <span class="text-danger">¥{{ "%.2f"|format(drug.max_price) }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if drug.last_crawled %}
+                                            <small>{{ drug.last_crawled[:16] }}</small>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('main.drug_detail', drug_id=drug.id) }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            查看
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        {% if keyword %}
+                                        未找到包含 "{{ keyword }}" 的药品
+                                        {% else %}
+                                        暂无药品数据，请先<a href="{{ url_for('main.crawl') }}">采集药品</a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 分页 -->
+{% if pages > 1 %}
+<nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+        <!-- 上一页 -->
+        <li class="page-item {{ 'disabled' if page == 1 else '' }}">
+            <a class="page-link" href="{{ url_for('main.drugs_list', page=page-1, sort=sort_by, q=keyword, view=view_mode) if page > 1 else '#' }}">
+                上一页
+            </a>
+        </li>
+        
+        <!-- 页码 -->
+        {% set start_page = [1, page - 2]|max %}
+        {% set end_page = [pages, page + 2]|min %}
+        
+        {% if start_page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('main.drugs_list', page=1, sort=sort_by, q=keyword, view=view_mode) }}">1</a>
+            </li>
+            {% if start_page > 2 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endif %}
+        
+        {% for p in range(start_page, end_page + 1) %}
+            <li class="page-item {{ 'active' if p == page else '' }}">
+                <a class="page-link" href="{{ url_for('main.drugs_list', page=p, sort=sort_by, q=keyword, view=view_mode) }}">{{ p }}</a>
+            </li>
+        {% endfor %}
+        
+        {% if end_page < pages %}
+            {% if end_page < pages - 1 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('main.drugs_list', page=pages, sort=sort_by, q=keyword, view=view_mode) }}">{{ pages }}</a>
+            </li>
+        {% endif %}
+        
+        <!-- 下一页 -->
+        <li class="page-item {{ 'disabled' if page == pages else '' }}">
+            <a class="page-link" href="{{ url_for('main.drugs_list', page=page+1, sort=sort_by, q=keyword, view=view_mode) if page < pages else '#' }}">
+                下一页
+            </a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h5 class="card-title">💡 快捷操作</h5>
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('main.crawl') }}" class="btn btn-primary">
+                        📥 采集更多药品
+                    </a>
+                    <a href="{{ url_for('main.search') }}" class="btn btn-success">
+                        🔍 搜索药品
+                    </a>
+                    <a href="{{ url_for('main.index') }}" class="btn btn-info">
+                        🏠 返回首页
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

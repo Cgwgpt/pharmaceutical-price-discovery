@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试检索链接</title>
+    <style>
+        #log {
+            background: #f8f9fa;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h2>测试采集完成后的检索链接</h2>
+    
+    <button onclick="testSingleCrawl()">测试单个药品采集</button>
+    <button onclick="testBatchCrawl()">测试批量采集</button>
+    <button onclick="clearLog()">清空日志</button>
+    
+    <div id="log" style="margin-top: 20px;"></div>
+    
+    <script>
+        function addLog(message) {
+            const log = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            log.innerHTML += `<div>[${time}] ${message}</div>`;
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        function testSingleCrawl() {
+            const keyword = '天麻蜜环菌片';
+            
+            addLog(`📊 [完整模式] 开始采集: ${keyword}`);
+            
+            setTimeout(() => {
+                addLog(`✅ [完整模式] 采集成功！`);
+                addLog(`📊 药品: ${keyword}`);
+                addLog(`📊 找到 67 个供应商`);
+                addLog(`💾 已保存 47 条新价格记录到数据库`);
+                
+                // 添加检索链接
+                const searchUrl = `/search?q=${encodeURIComponent(keyword)}`;
+                addLog(`🔍 <a href="${searchUrl}" target="_blank" style="color: #0d6efd; text-decoration: underline;">点击这里检索查看已入库的药品数据</a>`);
+                
+                addLog(`\n💰 供应商价格（前10个）:`);
+                addLog(`  1. 龙飞翔: ¥1.55`);
+                addLog(`  2. 湖湘药业药灵灵: ¥1.57`);
+                addLog(`  ... 还有 57 个供应商`);
+            }, 1000);
+        }
+        
+        function testBatchCrawl() {
+            const keyword = '天麻蜜环菌片';
+            
+            addLog(`📦 [批量采集] 开始: ${keyword}`);
+            addLog(`📊 将采集最多 10 个药品`);
+            
+            setTimeout(() => {
+                addLog(`\n✅ [批量采集] 完成！`);
+                addLog(`📊 采集了 10 个药品`);
+                addLog(`📊 找到 520 个供应商`);
+                addLog(`💾 保存了 450 条新价格记录`);
+                
+                // 添加检索链接
+                const searchUrl = `/search?q=${encodeURIComponent(keyword)}`;
+                addLog(`\n🔍 <a href="${searchUrl}" target="_blank" style="color: #0d6efd; text-decoration: underline; font-weight: bold;">点击这里检索查看已入库的药品数据</a>`);
+                
+                addLog(`\n📋 药品详情：`);
+                addLog(`  1. 5瓶起购 福建汇天 天麻蜜环菌片`);
+                addLog(`     └─ 59 个供应商，保存 59 条记录`);
+                addLog(`  2. 三明天泰 天麻蜜环菌片`);
+                addLog(`     └─ 47 个供应商，保存 47 条记录`);
+                addLog(`  ... 还有 8 个药品`);
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

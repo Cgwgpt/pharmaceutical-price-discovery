@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}比价 - {{ drug_name or '药品比价' }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h4>📊 药品比价</h4>
+        
+        <!-- 功能说明提示 -->
+        <div class="alert alert-info py-2 mb-3" style="font-size: 13px;">
+            <strong>💡 功能说明：</strong>
+            <ul class="mb-0 mt-1" style="font-size: 12px;">
+                <li><strong>比价功能</strong>用于比较<strong>不同平台</strong>（如药师帮、京东、天猫等）的价格</li>
+                <li>如需查看<strong>同一药品的不同供应商价格</strong>，请使用<a href="{{ url_for('main.search') }}" class="alert-link">搜索功能</a> → 点击药品查看详情</li>
+                <li>目前系统仅采集了药师帮平台的数据，暂不支持跨平台比价</li>
+            </ul>
+        </div>
+        
+        <form action="{{ url_for('main.compare') }}" method="get" class="mt-3">
+            <div class="input-group" style="max-width: 500px;">
+                <input type="text" class="form-control" name="drug" 
+                       value="{{ drug_name }}" placeholder="输入药品名称进行比价">
+                <button class="btn btn-primary" type="submit">比价</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if comparison %}
+<!-- 比价摘要 - 只显示最优产品的信息 -->
+{% if comparison.product_groups and comparison.product_groups|length > 0 %}
+{% set best_group = comparison.product_groups[0] %}
+{% set best_product = best_group.manufacturers[0] if best_group.manufacturers else none %}
+{% if best_product %}
+<div class="alert alert-success mb-4">
+    <h5 class="mb-2">🏆 最优选择：{{ best_group.common_name }}</h5>
+    <p class="mb-0">
+        厂家：{{ best_product.manufacturer }} | 
+        规格：{{ best_product.specification or '-' }} | 
+        价格：<strong>¥{{ "%.2f"|format(best_product.min_price) }}</strong>
+        {% if best_product.min_price != best_product.max_price %}
+        ~ ¥{{ "%.2f"|format(best_product.max_price) }}
+        （价差 {{ best_product.price_diff_percent }}%）
+        {% endif %}
+        | 供应商：{{ best_product.supplier_count }}家
+    </p>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- 按规格分组的产品比价 -->
+{% if comparison.product_groups %}
+{% for group in comparison.product_groups %}
+{% set all_min_prices = group.manufacturers | map(attribute='min_price') | list %}
+{% set all_max_prices = group.manufacturers | map(attribute='max_price') | list %}
+{% set group_min = all_min_prices | min %}
+{% set group_max = all_max_prices | max %}
+{% set group_diff = group_max - group_min %}
+{% set group_diff_percent = ((group_max - group_min) / group_min * 100) | round(2) if group_min > 0 else 0 %}
+
+<div class="card mb-4">
+    <div class="card-header {% if loop.first %}bg-success text-white{% else %}bg-secondary text-white{% endif %}">
+        <h5 class="mb-0">
+            {% if loop.first %}🏆{% else %}📦{% endif %} 
+            {{ group.display_name or (group.common_name ~ ' ' ~ group.specification) }}
+            {% if group.manufacturer_count > 1 %}
+            <span class="badge bg-light text-dark ms-2">{{ group.manufacturer_count }} 个厂家可选</span>
+            {% endif %}
+        </h5>
+        {% if loop.first %}
+        <small>最优规格</small>
+        {% else %}
+        <small>其他规格</small>
+        {% endif %}
+    </div>
+    
+    <!-- 该规格的价格摘要 -->
+    <div class="card-body border-bottom bg-light">
+        <div class="row text-center">
+            <div class="col-3">
+                <div class="text-success">
+                    <h5 class="mb-0">¥{{ "%.2f"|format(group_min) }}</h5>
+                    <small>最低价</small>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="text-danger">
+                    <h5 class="mb-0">¥{{ "%.2f"|format(group_max) }}</h5>
+                    <small>最高价</small>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="text-warning">
+                    <h5 class="mb-0">{{ group_diff_percent }}%</h5>
+                    <small>价差</small>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="text-info">
+                    <h5 class="mb-0">¥{{ "%.2f"|format(group_diff) }}</h5>
+                    <small>可节省</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>推荐</th>
+                        <th>生产厂家</th>
+                        <th>规格</th>
+                        <th>最低价</th>
+                        <th>最高价</th>
+                        <th>价差</th>
+                        <th>供应商数</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in group.manufacturers %}
+                    <tr {% if product.is_best_choice %}class="table-success"{% endif %}>
+                        <td>
+                            {% if product.is_best_choice %}
+                            <span class="badge bg-success">✓ 最优</span>
+                            {% else %}
+                            <span class="badge bg-secondary">可选</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ product.manufacturer[:20] }}{% if product.manufacturer|length > 20 %}...{% endif %}</td>
+                        <td>{{ product.specification or '-' }}</td>
+                        <td class="text-success fw-bold">¥{{ "%.2f"|format(product.min_price) }}</td>
+                        <td class="text-danger">¥{{ "%.2f"|format(product.max_price) }}</td>
+                        <td>
+                            {% if product.price_diff_percent > 0 %}
+                            <span class="badge bg-warning text-dark">{{ product.price_diff_percent }}%</span>
+                            {% else %}
+                            <span class="badge bg-secondary">0%</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ product.supplier_count }}家
+                            {% if product.prices and product.prices[0].source_url %}
+                            <a href="{{ product.prices[0].source_url }}" target="_blank" class="ms-1" title="在药师帮查看详情">
+                                <small>🔗</small>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- 详细价格列表 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">📋 详细价格列表（共 {{ comparison.total_records }} 条）</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>排名</th>
+                        <th>药品名称</th>
+                        <th>规格</th>
+                        <th>厂家</th>
+                        <th>价格</th>
+                        <th>来源</th>
+                        <th>更新时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in comparison.prices %}
+                    <tr {% if item.is_lowest %}class="table-success"{% endif %}>
+                        <td>
+                            {% if item.is_lowest %}
+                            <span class="badge bg-success">最低价</span>
+                            {% else %}
+                            {{ loop.index }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('main.drug_detail', drug_id=item.drug_id) }}">
+                                {{ item.drug_name[:30] }}{% if item.drug_name|length > 30 %}...{% endif %}
+                            </a>
+                        </td>
+                        <td>{{ item.specification or '-' }}</td>
+                        <td>{{ (item.manufacturer or '-')[:15] }}{% if item.manufacturer and item.manufacturer|length > 15 %}...{% endif %}</td>
+                        <td class="{% if item.is_lowest %}text-success fw-bold{% else %}text-danger{% endif %}">
+                            ¥{{ "%.2f"|format(item.price) }}
+                        </td>
+                        <td>
+                            <a href="{{ item.source_url }}" target="_blank">{{ item.source_name }}</a>
+                        </td>
+                        <td>{{ item.crawled_at[:10] if item.crawled_at else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% elif drug_name %}
+<div class="alert alert-warning">
+    <h5 class="mb-2">⚠️ 未找到"{{ drug_name }}"的价格数据</h5>
+    <p class="mb-2">可能的原因：</p>
+    <ul class="mb-2" style="font-size: 13px;">
+        <li>该药品尚未采集数据</li>
+        <li>目前系统仅支持药师帮平台的数据，不支持跨平台比价</li>
+    </ul>
+    <p class="mb-0">
+        <strong>建议操作：</strong>
+        <a href="{{ url_for('main.search') }}?q={{ drug_name }}" class="alert-link">前往搜索页面</a>查看该药品的供应商价格，
+        或<a href="{{ url_for('main.crawl') }}" class="alert-link">前往采集页面</a>采集该药品数据
+    </p>
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+    <p>请输入药品名称开始比价</p>
+</div>
+{% endif %}
+{% endblock %}

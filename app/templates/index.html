@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - 医药价格发现系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="search-box">
+            <h2 class="text-center mb-4">🔍 药品价格查询</h2>
+            <form action="{{ url_for('main.search') }}" method="get">
+                <div class="input-group input-group-lg">
+                    <input type="text" class="form-control" name="q" placeholder="输入药品名称，如：阿莫西林、感冒灵...">
+                    <button class="btn btn-primary" type="submit">搜索</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <h3>{{ stats.drug_count }}</h3>
+                <p class="mb-0">药品种类</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <h3>{{ stats.price_count }}</h3>
+                <p class="mb-0">价格记录</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <h3>{{ stats.sources|length }}</h3>
+                <p class="mb-0">数据来源</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最新价格 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">📋 最新价格</h5>
+                <small class="text-muted">
+                    {% if stats.last_updated %}
+                    更新于 {{ stats.last_updated[:19] }}
+                    {% endif %}
+                </small>
+            </div>
+            <div class="card-body">
+                {% if prices %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>药品名称</th>
+                                <th>规格</th>
+                                <th>价格</th>
+                                <th>来源</th>
+                                <th>更新时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in prices %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('main.drug_detail', drug_id=item.drug_id) }}">
+                                        {{ item.drug_name }}
+                                    </a>
+                                </td>
+                                <td>{{ item.specification or '-' }}</td>
+                                <td class="price-low">¥{{ "%.2f"|format(item.price) }}</td>
+                                <td>{{ item.source_name }}</td>
+                                <td>{{ item.crawled_at[:10] if item.crawled_at else '-' }}</td>
+                                <td>
+                                    <a href="{{ url_for('main.compare') }}?drug={{ item.drug_name }}" 
+                                       class="btn btn-sm btn-outline-primary">比价</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <p>暂无价格数据</p>
+                    <p>请先运行爬虫采集数据</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

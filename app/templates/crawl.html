@@ -1,0 +1,1055 @@
+{% extends "base.html" %}
+
+{% block title %}采集管理 - 医药价格发现系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2>📥 采集管理</h2>
+        <p class="text-muted">管理药品监控列表，执行批量采集任务</p>
+    </div>
+</div>
+
+<!-- Token配置卡片 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <span>🔑 药师帮账号配置（必须先配置才能采集）</span>
+                <span class="badge" id="tokenStatus">检测中...</span>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-7">
+                        <div class="alert alert-warning py-2 mb-2">
+                            <strong>📋 请粘贴Token或完整Cookie</strong>（从浏览器复制）
+                        </div>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="manualToken" 
+                                   placeholder="粘贴Token（如: 6eb9c20b...）或完整Cookie字符串">
+                            <button class="btn btn-primary" onclick="saveManualToken()">
+                                💾 保存Token
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="card bg-light">
+                            <div class="card-body py-2" style="font-size: 12px;">
+                                <strong>📖 获取Token步骤：</strong>
+                                <ol class="mb-0 ps-3">
+                                    <li>打开 <a href="https://dian.ysbang.cn" target="_blank">dian.ysbang.cn</a> 并登录</li>
+                                    <li>按 <kbd>F12</kbd> → Network 标签</li>
+                                    <li>刷新页面，点击任意请求</li>
+                                    <li>在 Headers 找到 <code>Token:</code> 后的值</li>
+                                    <li>复制粘贴到左边输入框</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <h3>{{ statistics.watch_list_count }}</h3>
+                <small>监控药品数</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3>{{ statistics.completed_tasks }}</h3>
+                <small>已完成任务</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>{{ statistics.total_items_crawled }}</h3>
+                <small>累计采集数据</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body text-center">
+                <h3>{{ statistics.today_items }}</h3>
+                <small>今日采集</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 左侧：监控列表管理 -->
+    <div class="col-md-5">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>📋 药品监控列表</span>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addDrugModal">
+                    + 添加药品
+                </button>
+            </div>
+            <div class="card-body">
+                <!-- 分类筛选 -->
+                <div class="mb-3">
+                    <select class="form-select form-select-sm" id="categoryFilter">
+                        <option value="">全部分类</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- 监控列表 -->
+                <div class="list-group" id="watchList" style="max-height: 400px; overflow-y: auto;">
+                    {% if watch_list %}
+                        {% for item in watch_list %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center" data-id="{{ item.id }}">
+                            <div>
+                                <strong>{{ item.keyword }}</strong>
+                                {% if item.category %}
+                                <span class="badge bg-secondary ms-1">{{ item.category }}</span>
+                                {% endif %}
+                                {% if item.priority == 2 %}
+                                <span class="badge bg-danger ms-1">紧急</span>
+                                {% elif item.priority == 1 %}
+                                <span class="badge bg-warning text-dark ms-1">重要</span>
+                                {% endif %}
+                                <br>
+                                <small class="text-muted">
+                                    采集{{ item.crawl_count }}次
+                                    {% if item.last_crawled_at %}
+                                    | 最后: {{ item.last_crawled_at[:10] }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeFromWatchList({{ item.id }})">
+                                ✕
+                            </button>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            暂无监控药品，点击上方按钮添加
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- 药品采集 -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                🎯 药品采集
+            </div>
+            <div class="card-body">
+                <!-- 采集类型选择 -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold">采集类型</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="crawlType" id="singleCrawl" value="single" checked>
+                        <label class="btn btn-outline-primary" for="singleCrawl">
+                            🎯 单个药品
+                        </label>
+                        
+                        <input type="radio" class="btn-check" name="crawlType" id="batchCrawl" value="batch">
+                        <label class="btn btn-outline-success" for="batchCrawl">
+                            📦 批量采集
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-2" id="crawlTypeHint">
+                        采集单个具体药品的所有供应商价格
+                    </small>
+                </div>
+                
+                <!-- 单个药品采集区域 -->
+                <div id="singleCrawlArea">
+                    <div class="alert alert-info py-2 mb-3" style="font-size: 12px;">
+                        <strong>💡 三种采集模式：</strong>
+                        <ul class="mb-0 mt-1" style="font-size: 11px;">
+                            <li><strong>⚡ 快速模式</strong>：API 获取热销价格（1-3秒）</li>
+                            <li><strong>📊 完整模式</strong>：获取所有供应商价格（10-30秒）</li>
+                            <li><strong>🧠 智能模式</strong>：自动选择最优方案（推荐）</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">药品名称</label>
+                        <input type="text" class="form-control" id="modeKeyword" 
+                               placeholder="输入药品名称，如：天麻蜜环菌片">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">药品ID（可选）
+                            <a href="#" data-bs-toggle="modal" data-bs-target="#drugIdHelpModal" class="text-decoration-none ms-1">
+                                <small>❓ 如何获取？</small>
+                            </a>
+                        </label>
+                        <input type="number" class="form-control" id="modeDrugId" 
+                               placeholder="留空即可，系统会自动搜索">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">采集模式</label>
+                        <select class="form-select" id="crawlMode">
+                            <option value="smart" selected>🧠 智能模式 - 自动选择（推荐）</option>
+                            <option value="quick">⚡ 快速模式 - API 热销价格</option>
+                            <option value="complete">📊 完整模式 - 所有供应商价格</option>
+                        </select>
+                    </div>
+                    
+                    <div id="smartOptions" style="display: block;">
+                        <div class="mb-3">
+                            <label class="form-label">最小供应商数（智能模式）</label>
+                            <input type="number" class="form-control" id="modeMinProviders" 
+                                   value="5" min="1" max="50">
+                            <small class="text-muted">低于此值将自动使用完整模式补充</small>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary w-100" onclick="crawlWithMode()">
+                        🎯 开始采集
+                    </button>
+                </div>
+                
+                <!-- 批量采集区域 -->
+                <div id="batchCrawlArea" style="display: none;">
+                    <div class="alert alert-success py-2 mb-3" style="font-size: 12px;">
+                        <strong>🎯 批量采集说明：</strong>
+                        <ul class="mb-0 mt-1" style="font-size: 11px;">
+                            <li>搜索关键词，获取所有匹配的药品</li>
+                            <li>逐个采集每个药品的供应商价格</li>
+                            <li>适合采集某个品类的完整数据</li>
+                            <li>例如：搜索"天麻蜜环菌片"，采集所有品牌/规格</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">搜索关键词</label>
+                        <input type="text" class="form-control" id="batchKeyword" 
+                               placeholder="输入药品名称，如：天麻蜜环菌片">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">最多采集药品数</label>
+                        <input type="number" class="form-control" id="batchMaxDrugs" 
+                               value="10" min="1" max="50">
+                        <small class="text-muted">建议10-20个，避免时间过长</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">每个药品最多采集供应商数</label>
+                        <input type="number" class="form-control" id="batchMaxProviders" 
+                               value="50" min="10" max="200">
+                    </div>
+                    
+                    <button class="btn btn-success w-100" onclick="batchCrawlSearch()">
+                        📦 开始批量采集
+                    </button>
+                    
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            ⏱️ 预计耗时：约 (药品数 × 15秒)，10个药品约2.5分钟
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+
+    </div>
+    
+    <!-- 右侧：采集任务 -->
+    <div class="col-md-7">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>📊 采集任务</span>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshTasks()">刷新</button>
+                    <button class="btn btn-sm btn-primary" onclick="createTaskFromWatchList()">
+                        从监控列表创建任务
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>任务名称</th>
+                                <th>状态</th>
+                                <th>进度</th>
+                                <th>采集数</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="taskList">
+                            {% for task in tasks %}
+                            <tr data-task-id="{{ task.id }}">
+                                <td>
+                                    <strong>{{ task.task_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ task.created_at[:16] if task.created_at else '' }}</small>
+                                </td>
+                                <td>
+                                    {% if task.status == 'running' %}
+                                    <span class="badge bg-primary">运行中</span>
+                                    {% elif task.status == 'completed' %}
+                                    <span class="badge bg-success">已完成</span>
+                                    {% elif task.status == 'failed' %}
+                                    <span class="badge bg-danger">失败</span>
+                                    {% elif task.status == 'cancelled' %}
+                                    <span class="badge bg-secondary">已取消</span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark">等待中</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="progress" style="width: 100px;">
+                                        <div class="progress-bar" style="width: {{ task.progress }}%">
+                                            {{ task.progress }}%
+                                        </div>
+                                    </div>
+                                    <small>{{ task.completed_keywords }}/{{ task.total_keywords }}</small>
+                                </td>
+                                <td>{{ task.total_items }}</td>
+                                <td>
+                                    {% if task.status == 'pending' %}
+                                    <button class="btn btn-sm btn-success" onclick="startTask({{ task.id }})">启动</button>
+                                    {% elif task.status == 'running' %}
+                                    <button class="btn btn-sm btn-danger" onclick="cancelTask({{ task.id }})">取消</button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">暂无采集任务</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 采集结果 -->
+        <div class="card">
+            <div class="card-header">📝 采集日志</div>
+            <div class="card-body">
+                <div id="crawlLog" style="height: 200px; overflow-y: auto; background: #f8f9fa; padding: 10px; font-family: monospace; font-size: 12px;">
+                    <div class="text-muted">等待采集任务...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加药品模态框 -->
+<div class="modal fade" id="addDrugModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加药品到监控列表</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">药品名称</label>
+                    <textarea class="form-control" id="addKeywords" rows="4" 
+                              placeholder="输入药品名称，每行一个"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">分类</label>
+                    <input type="text" class="form-control" id="addCategory" 
+                           placeholder="如：感冒药、抗生素、心血管">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">优先级</label>
+                    <select class="form-select" id="addPriority">
+                        <option value="0">普通</option>
+                        <option value="1">重要</option>
+                        <option value="2">紧急</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="addToWatchList()">添加</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 药品ID帮助模态框 -->
+<div class="modal fade" id="drugIdHelpModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">📖 如何获取药品ID（drugId）？</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-success">
+                    <strong>💡 提示：</strong>大多数情况下，您<strong>不需要</strong>提供药品ID！
+                    <br>只需输入药品名称，系统会自动搜索并采集。
+                </div>
+                
+                <h6 class="mt-4">🎯 什么时候需要药品ID？</h6>
+                <ul>
+                    <li>当搜索结果有多个同名药品时，需要指定具体哪一个</li>
+                    <li>当您已经知道准确的drugId，想要更快速精确的采集</li>
+                </ul>
+                
+                <h6 class="mt-4">📋 获取步骤：</h6>
+                <ol>
+                    <li><strong>打开药师帮网站</strong>
+                        <br><a href="https://dian.ysbang.cn" target="_blank">https://dian.ysbang.cn</a>
+                    </li>
+                    <li><strong>搜索药品</strong>
+                        <br>在搜索框输入药品名称，如"天麻蜜环菌片"
+                    </li>
+                    <li><strong>点击进入药品详情页</strong>
+                        <br>从搜索结果中选择您要的药品
+                    </li>
+                    <li><strong>查看浏览器地址栏</strong>
+                        <br>URL格式：<code>https://dian.ysbang.cn/goods/detail?drugId=<span class="text-danger">12345</span></code>
+                        <br>红色数字部分就是 drugId
+                    </li>
+                    <li><strong>复制drugId</strong>
+                        <br>将数字复制到"药品ID"输入框
+                    </li>
+                </ol>
+                
+                <h6 class="mt-4">🔍 示例：</h6>
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <p class="mb-2"><strong>药品：</strong>天麻蜜环菌片</p>
+                        <p class="mb-2"><strong>URL：</strong><code>https://dian.ysbang.cn/goods/detail?drugId=4363</code></p>
+                        <p class="mb-0"><strong>drugId：</strong><span class="badge bg-primary">4363</span></p>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning mt-4">
+                    <strong>⚠️ 注意：</strong>
+                    <ul class="mb-0">
+                        <li>不同规格、不同厂家的同名药品，drugId 不同</li>
+                        <li>如果不确定，建议留空，让系统自动搜索</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">知道了</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 添加到监控列表
+function addToWatchList() {
+    const keywords = document.getElementById('addKeywords').value.trim().split('\n').filter(k => k.trim());
+    const category = document.getElementById('addCategory').value.trim();
+    const priority = parseInt(document.getElementById('addPriority').value);
+    
+    if (keywords.length === 0) {
+        alert('请输入药品名称');
+        return;
+    }
+    
+    fetch('/api/crawl/watch-list', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({keywords, category: category || null, priority})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.code === 0) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+// 从监控列表移除
+function removeFromWatchList(id) {
+    if (!confirm('确定要移除吗？')) return;
+    
+    fetch(`/api/crawl/watch-list/${id}`, {method: 'DELETE'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.code === 0) {
+            document.querySelector(`[data-id="${id}"]`).remove();
+        }
+    });
+}
+
+// 从监控列表创建任务
+function createTaskFromWatchList() {
+    const category = document.getElementById('categoryFilter').value;
+    
+    fetch('/api/crawl/tasks', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({use_watch_list: true, category: category || null})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.code === 0) {
+            addLog(`✅ 任务已创建: ${data.data.task_name}`);
+            refreshTasks();
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+// 启动任务
+function startTask(taskId) {
+    fetch(`/api/crawl/tasks/${taskId}/start`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+        addLog(data.message);
+        if (data.code === 0) {
+            startTaskPolling(taskId);
+        }
+    });
+}
+
+// 取消任务
+function cancelTask(taskId) {
+    if (!confirm('确定要取消任务吗？')) return;
+    
+    fetch(`/api/crawl/tasks/${taskId}/cancel`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+        addLog(data.message);
+        refreshTasks();
+    });
+}
+
+// 快速采集
+function quickCrawl() {
+    const keywords = document.getElementById('quickKeywords').value.trim().split('\n').filter(k => k.trim());
+    
+    if (keywords.length === 0) {
+        alert('请输入药品名称');
+        return;
+    }
+    
+    addLog(`🚀 开始快速采集: ${keywords.join(', ')}`);
+    
+    fetch('/api/crawl/quick', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({keywords})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.code === 0) {
+            const result = data.data;
+            addLog(`✅ 采集完成: 共${result.total_items}条数据`);
+            result.results.forEach(r => {
+                addLog(`  - ${r.keyword}: ${r.items_count}条 ${r.success ? '✓' : '✗'}`);
+            });
+        } else {
+            addLog(`❌ 采集失败: ${data.message}`);
+        }
+    });
+}
+
+// 刷新任务列表
+function refreshTasks() {
+    fetch('/api/crawl/tasks')
+    .then(r => r.json())
+    .then(data => {
+        if (data.code === 0) {
+            updateTaskTable(data.data);
+        }
+    });
+}
+
+// 更新任务表格
+function updateTaskTable(tasks) {
+    const tbody = document.getElementById('taskList');
+    if (tasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无采集任务</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = tasks.map(task => `
+        <tr data-task-id="${task.id}">
+            <td>
+                <strong>${task.task_name}</strong><br>
+                <small class="text-muted">${task.created_at ? task.created_at.slice(0, 16) : ''}</small>
+            </td>
+            <td>${getStatusBadge(task.status)}</td>
+            <td>
+                <div class="progress" style="width: 100px;">
+                    <div class="progress-bar" style="width: ${task.progress}%">${task.progress}%</div>
+                </div>
+                <small>${task.completed_keywords}/${task.total_keywords}</small>
+            </td>
+            <td>${task.total_items}</td>
+            <td>${getTaskActions(task)}</td>
+        </tr>
+    `).join('');
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'running': '<span class="badge bg-primary">运行中</span>',
+        'completed': '<span class="badge bg-success">已完成</span>',
+        'failed': '<span class="badge bg-danger">失败</span>',
+        'cancelled': '<span class="badge bg-secondary">已取消</span>',
+        'pending': '<span class="badge bg-warning text-dark">等待中</span>'
+    };
+    return badges[status] || status;
+}
+
+function getTaskActions(task) {
+    if (task.status === 'pending') {
+        return `<button class="btn btn-sm btn-success" onclick="startTask(${task.id})">启动</button>`;
+    } else if (task.status === 'running') {
+        return `<button class="btn btn-sm btn-danger" onclick="cancelTask(${task.id})">取消</button>`;
+    }
+    return '';
+}
+
+// 任务进度轮询
+let pollingInterval = null;
+function startTaskPolling(taskId) {
+    if (pollingInterval) clearInterval(pollingInterval);
+    
+    pollingInterval = setInterval(() => {
+        fetch(`/api/crawl/tasks/${taskId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.code === 0) {
+                const task = data.data;
+                addLog(`📊 进度: ${task.completed_keywords}/${task.total_keywords} (${task.progress}%)`);
+                refreshTasks();
+                
+                if (task.status !== 'running') {
+                    clearInterval(pollingInterval);
+                    addLog(`🏁 任务${task.status === 'completed' ? '完成' : '结束'}: 共采集${task.total_items}条数据`);
+                }
+            }
+        });
+    }, 3000);
+}
+
+// 添加日志
+function addLog(message) {
+    const log = document.getElementById('crawlLog');
+    const time = new Date().toLocaleTimeString();
+    log.innerHTML += `<div>[${time}] ${message}</div>`;
+    log.scrollTop = log.scrollHeight;
+}
+
+// 分类筛选
+document.getElementById('categoryFilter').addEventListener('change', function() {
+    const category = this.value;
+    fetch(`/api/crawl/watch-list?category=${category}`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.code === 0) {
+            updateWatchList(data.data);
+        }
+    });
+});
+
+function updateWatchList(items) {
+    const list = document.getElementById('watchList');
+    if (items.length === 0) {
+        list.innerHTML = '<div class="text-center text-muted py-4">暂无监控药品</div>';
+        return;
+    }
+    
+    list.innerHTML = items.map(item => `
+        <div class="list-group-item d-flex justify-content-between align-items-center" data-id="${item.id}">
+            <div>
+                <strong>${item.keyword}</strong>
+                ${item.category ? `<span class="badge bg-secondary ms-1">${item.category}</span>` : ''}
+                ${item.priority === 2 ? '<span class="badge bg-danger ms-1">紧急</span>' : ''}
+                ${item.priority === 1 ? '<span class="badge bg-warning text-dark ms-1">重要</span>' : ''}
+                <br>
+                <small class="text-muted">
+                    采集${item.crawl_count}次
+                    ${item.last_crawled_at ? `| 最后: ${item.last_crawled_at.slice(0, 10)}` : ''}
+                </small>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeFromWatchList(${item.id})">✕</button>
+        </div>
+    `).join('');
+}
+
+// 初始化
+addLog('📋 采集管理页面已加载');
+checkTokenStatus();
+
+// 检查Token状态
+function checkTokenStatus() {
+    fetch('/api/crawl/token/status')
+    .then(r => r.json())
+    .then(data => {
+        const badge = document.getElementById('tokenStatus');
+        if (data.code === 0 && data.data.valid) {
+            badge.className = 'badge bg-success';
+            badge.textContent = '✓ Token有效';
+            addLog('✅ Token状态正常');
+        } else {
+            badge.className = 'badge bg-danger';
+            badge.textContent = '✗ Token无效';
+            addLog('⚠️ Token无效或已过期，请配置');
+        }
+    })
+    .catch(() => {
+        document.getElementById('tokenStatus').className = 'badge bg-warning';
+        document.getElementById('tokenStatus').textContent = '未知';
+    });
+}
+
+// 自动获取Token
+function autoGetToken() {
+    const phone = document.getElementById('ysbPhone').value.trim();
+    const password = document.getElementById('ysbPassword').value.trim();
+    
+    if (!phone || !password) {
+        alert('请输入手机号和密码');
+        return;
+    }
+    
+    const btn = document.getElementById('loginBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ 登录中...';
+    btn.disabled = true;
+    
+    addLog('🔄 正在自动登录，请稍候（约10-20秒）...');
+    
+    fetch('/api/crawl/token/auto', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({phone, password})
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        
+        if (data.code === 0) {
+            addLog('✅ ' + data.message);
+            checkTokenStatus();
+            alert('🎉 登录成功！Token已自动保存，现在可以开始采集了');
+        } else {
+            addLog('❌ ' + data.message);
+            alert('登录失败: ' + data.message + '\n\n请尝试手动方式获取Token');
+        }
+    })
+    .catch(err => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        addLog('❌ 请求失败: ' + err);
+        alert('请求失败，请检查网络连接');
+    });
+}
+
+// 保存手动Token
+function saveManualToken() {
+    console.log('saveManualToken 函数被调用');
+    
+    let token = document.getElementById('manualToken').value.trim();
+    
+    console.log('Token值:', token);
+    
+    if (!token) {
+        alert('请输入Token');
+        return;
+    }
+    
+    addLog('💾 正在保存Token...');
+    
+    fetch('/api/crawl/token/manual', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({token})
+    })
+    .then(r => r.json())
+    .then(data => {
+        console.log('API响应:', data);
+        if (data.code === 0) {
+            addLog('✅ ' + data.message);
+            checkTokenStatus();
+            alert('🎉 Token保存成功！现在可以开始采集了');
+        } else {
+            addLog('❌ ' + data.message);
+            alert(data.message);
+        }
+    })
+    .catch(err => {
+        console.error('请求错误:', err);
+        addLog('❌ 请求失败');
+        alert('保存失败，请重试');
+    });
+}
+
+
+
+// 采集模式选择
+function crawlWithMode() {
+    const keyword = document.getElementById('modeKeyword').value.trim();
+    const drugId = document.getElementById('modeDrugId').value.trim();
+    const mode = document.getElementById('crawlMode').value;
+    
+    if (!keyword) {
+        alert('请输入药品名称');
+        return;
+    }
+    
+    const btn = event.target;
+    btn.disabled = true;
+    
+    let endpoint, modeText, modeIcon;
+    let body = {
+        keyword: keyword,
+        drug_id: drugId ? parseInt(drugId) : null
+    };
+    
+    if (mode === 'quick') {
+        endpoint = '/api/crawl/quick';
+        modeText = '快速模式';
+        modeIcon = '⚡';
+        btn.innerHTML = '⏳ 快速采集中...';
+    } else if (mode === 'complete') {
+        endpoint = '/api/crawl/complete';
+        modeText = '完整模式';
+        modeIcon = '📊';
+        btn.innerHTML = '⏳ 完整采集中（需10-30秒）...';
+    } else {
+        endpoint = '/api/crawl/smart';
+        modeText = '智能模式';
+        modeIcon = '🧠';
+        const minProviders = parseInt(document.getElementById('modeMinProviders').value) || 5;
+        body.min_providers = minProviders;
+        btn.innerHTML = '⏳ 智能采集中...';
+    }
+    
+    addLog(`${modeIcon} [${modeText}] 开始采集: ${keyword}` + (drugId ? ` (drugId=${drugId})` : ''));
+    
+    fetch(endpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '🎯 开始采集';
+        
+        if (data.code === 0 && data.data.success) {
+            const result = data.data;
+            
+            addLog(`✅ [${modeText}] 采集成功！`);
+            addLog(`📊 药品: ${keyword}`);
+            addLog(`📊 找到 ${result.providers?.length || 0} 个供应商`);
+            
+            if (result.mode === 'smart') {
+                const method = result.method;
+                const methodName = method === 'api' ? 'API' : method === 'playwright' ? 'Playwright' : 'API + Playwright';
+                addLog(`📡 采集方式: ${methodName}`);
+                
+                if (result.api_count > 0) {
+                    addLog(`  └─ API: ${result.api_count} 个`);
+                }
+                if (result.playwright_count > 0) {
+                    addLog(`  └─ Playwright: ${result.playwright_count} 个`);
+                }
+            }
+            
+            if (result.saved_count) {
+                addLog(`💾 已保存 ${result.saved_count} 条新价格记录到数据库`);
+                
+                // 添加检索链接
+                const searchUrl = `/search?q=${encodeURIComponent(keyword)}`;
+                addLog(`🔍 <a href="${searchUrl}" target="_blank" style="color: #0d6efd; text-decoration: underline;">点击这里检索查看已入库的药品数据</a>`);
+            } else if (result.saved_count === 0) {
+                addLog(`💾 数据已存在，未新增记录（数据库中已有这些价格）`);
+                
+                // 即使数据已存在，也提供检索链接
+                const searchUrl = `/search?q=${encodeURIComponent(keyword)}`;
+                addLog(`🔍 <a href="${searchUrl}" target="_blank" style="color: #0d6efd; text-decoration: underline;">点击这里检索查看数据库中的药品数据</a>`);
+            }
+            
+            // 显示供应商价格
+            const providers = result.providers || [];
+            if (providers.length > 0) {
+                providers.sort((a, b) => (a.price || 0) - (b.price || 0));
+                
+                addLog(`\n💰 供应商价格（前10个）:`);
+                providers.slice(0, 10).forEach((p, i) => {
+                    const source = p.source ? `[${p.source.toUpperCase()}]` : '';
+                    addLog(`  ${i+1}. ${p.provider_name}: ¥${p.price?.toFixed(2)} ${source}`);
+                });
+                if (providers.length > 10) {
+                    addLog(`  ... 还有 ${providers.length - 10} 个供应商`);
+                }
+                
+                // 价格统计
+                const prices = providers.map(p => p.price).filter(p => p > 0);
+                if (prices.length > 0) {
+                    const minPrice = Math.min(...prices);
+                    const maxPrice = Math.max(...prices);
+                    const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+                    addLog(`\n📈 价格统计:`);
+                    addLog(`  最低: ¥${minPrice.toFixed(2)}`);
+                    addLog(`  最高: ¥${maxPrice.toFixed(2)}`);
+                    addLog(`  平均: ¥${avgPrice.toFixed(2)}`);
+                    addLog(`  价差: ¥${(maxPrice - minPrice).toFixed(2)} (${((maxPrice - minPrice) / minPrice * 100).toFixed(1)}%)`);
+                }
+            }
+            
+            if (result.error) {
+                addLog(`⚠️ 提示: ${result.error}`);
+            }
+        } else {
+            addLog(`❌ [${modeText}] 失败: ${data.message}`);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '🎯 开始采集';
+        addLog(`❌ 请求失败: ${err.message}`);
+    });
+}
+
+// 监听模式选择变化
+document.addEventListener('DOMContentLoaded', function() {
+    const modeSelect = document.getElementById('crawlMode');
+    const smartOptions = document.getElementById('smartOptions');
+    
+    if (modeSelect && smartOptions) {
+        modeSelect.addEventListener('change', function() {
+            if (this.value === 'smart') {
+                smartOptions.style.display = 'block';
+            } else {
+                smartOptions.style.display = 'none';
+            }
+        });
+    }
+    
+    // 监听采集类型切换
+    const singleCrawlRadio = document.getElementById('singleCrawl');
+    const batchCrawlRadio = document.getElementById('batchCrawl');
+    const singleCrawlArea = document.getElementById('singleCrawlArea');
+    const batchCrawlArea = document.getElementById('batchCrawlArea');
+    const crawlTypeHint = document.getElementById('crawlTypeHint');
+    
+    if (singleCrawlRadio && batchCrawlRadio) {
+        singleCrawlRadio.addEventListener('change', function() {
+            if (this.checked) {
+                singleCrawlArea.style.display = 'block';
+                batchCrawlArea.style.display = 'none';
+                crawlTypeHint.textContent = '采集单个具体药品的所有供应商价格';
+            }
+        });
+        
+        batchCrawlRadio.addEventListener('change', function() {
+            if (this.checked) {
+                singleCrawlArea.style.display = 'none';
+                batchCrawlArea.style.display = 'block';
+                crawlTypeHint.textContent = '搜索关键词，采集所有匹配药品的供应商价格';
+            }
+        });
+    }
+});
+
+// 批量采集搜索结果
+function batchCrawlSearch() {
+    const keyword = document.getElementById('batchKeyword').value.trim();
+    const maxDrugs = parseInt(document.getElementById('batchMaxDrugs').value) || 10;
+    const maxProviders = parseInt(document.getElementById('batchMaxProviders').value) || 50;
+    
+    if (!keyword) {
+        alert('请输入搜索关键词');
+        return;
+    }
+    
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ 批量采集中...';
+    
+    addLog(`📦 [批量采集] 开始: ${keyword}`);
+    addLog(`📊 将采集最多 ${maxDrugs} 个药品，每个药品最多 ${maxProviders} 个供应商`);
+    addLog(`⏱️ 预计耗时: ${Math.ceil(maxDrugs * 15 / 60)} 分钟，请耐心等待...`);
+    
+    fetch('/api/crawl/batch-search', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            keyword: keyword,
+            max_drugs: maxDrugs,
+            max_providers_per_drug: maxProviders
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '📦 开始批量采集';
+        
+        if (data.code === 0 && data.data.success) {
+            const result = data.data;
+            
+            addLog(`\n✅ [批量采集] 完成！`);
+            addLog(`📊 采集了 ${result.total_drugs} 个药品`);
+            addLog(`📊 找到 ${result.total_providers} 个供应商`);
+            addLog(`💾 保存了 ${result.total_saved} 条新价格记录`);
+            
+            // 添加检索链接
+            const searchUrl = `/search?q=${encodeURIComponent(keyword)}`;
+            addLog(`\n🔍 <a href="${searchUrl}" target="_blank" style="color: #0d6efd; text-decoration: underline; font-weight: bold;">点击这里检索查看已入库的药品数据</a>`);
+            
+            // 显示每个药品的详情
+            if (result.drugs && result.drugs.length > 0) {
+                addLog(`\n📋 药品详情：`);
+                result.drugs.forEach((drug, i) => {
+                    if (drug.success) {
+                        addLog(`  ${i+1}. ${drug.name}`);
+                        addLog(`     └─ ${drug.providers_count} 个供应商，保存 ${drug.saved_count} 条记录`);
+                    } else {
+                        addLog(`  ${i+1}. ${drug.name} ❌ ${drug.error || '采集失败'}`);
+                    }
+                });
+            }
+            
+            if (result.error) {
+                addLog(`⚠️ 提示: ${result.error}`);
+            }
+        } else {
+            addLog(`❌ [批量采集] 失败: ${data.message}`);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '📦 开始批量采集';
+        addLog(`❌ 请求失败: ${err.message}`);
+    });
+}
+
+
+
+// 页面加载完成后检查Token状态
+checkTokenStatus();
+</script>
+{% endblock %}

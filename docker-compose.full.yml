@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  pharma-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.full
+    container_name: pharma-price-discovery-full
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=your-secret-key-change-this
+      - DATABASE_URL=sqlite:///data/pharma_prices.db
+      # Chrome相关环境变量
+      - DISPLAY=:99
+      - CHROME_BIN=/usr/bin/google-chrome
+      - CHROME_PATH=/usr/bin/google-chrome
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # 添加必要的安全选项
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 2gb

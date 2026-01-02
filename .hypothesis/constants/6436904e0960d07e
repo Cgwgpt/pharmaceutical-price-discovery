@@ -1,0 +1,4 @@
+# file: /Users/chenguowen/ypjgjc/config.py
+# hypothesis_version: 6.148.8
+
+[408, 500, 502, 503, 504, 'CONCURRENT_REQUESTS', 'DATABASE_URL', 'DOWNLOAD_DELAY', 'RETRY_HTTP_CODES', 'RETRY_TIMES', 'SECRET_KEY', 'USER_AGENT', 'sqlite:///:memory:']

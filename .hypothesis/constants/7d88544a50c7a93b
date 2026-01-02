@@ -1,0 +1,4 @@
+# file: /Users/chenguowen/ypjgjc/app/models.py
+# hypothesis_version: 6.148.8
+
+[100, 200, 500, 'Drug', 'DrugAlias', 'PriceRecord', 'aliases', 'drug', 'drug_aliases', 'drugs', 'drugs.id', 'dynamic', 'price_records']

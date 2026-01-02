@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}搜索结果 - {{ keyword }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h4>🔍 搜索结果：{{ keyword }}</h4>
+        <p class="text-muted">共找到 {{ total }} 个相关药品</p>
+    </div>
+</div>
+
+{% if drugs %}
+<div class="row">
+    {% for drug in drugs %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card card-hover h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <a href="{{ url_for('main.drug_detail', drug_id=drug.id) }}" class="text-decoration-none">
+                        {{ drug.name }}
+                    </a>
+                </h5>
+                <p class="card-text text-muted">
+                    {% if drug.specification %}
+                    <small>规格：{{ drug.specification }}</small><br>
+                    {% endif %}
+                    {% if drug.manufacturer %}
+                    <small>厂家：{{ drug.manufacturer[:20] }}{% if drug.manufacturer|length > 20 %}...{% endif %}</small>
+                    {% endif %}
+                </p>
+                {% if drug.latest_price %}
+                <p class="card-text">
+                    <span class="price-low fs-4">¥{{ "%.2f"|format(drug.latest_price) }}</span>
+                    <small class="text-muted">/ {{ drug.source_name }}</small>
+                </p>
+                {% else %}
+                <p class="card-text text-muted">暂无价格</p>
+                {% endif %}
+            </div>
+            <div class="card-footer bg-transparent">
+                <a href="{{ url_for('main.compare') }}?drug={{ drug.name }}" class="btn btn-sm btn-outline-primary">
+                    比价
+                </a>
+                <a href="{{ url_for('main.drug_detail', drug_id=drug.id) }}" class="btn btn-sm btn-outline-secondary">
+                    详情
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- 分页 -->
+{% if pages > 1 %}
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center">
+        {% if page > 1 %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.search', q=keyword, page=page-1) }}">上一页</a>
+        </li>
+        {% endif %}
+        
+        {% for p in range(1, pages + 1) %}
+        <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('main.search', q=keyword, page=p) }}">{{ p }}</a>
+        </li>
+        {% endfor %}
+        
+        {% if page < pages %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.search', q=keyword, page=page+1) }}">下一页</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center py-5">
+    <p class="text-muted">未找到相关药品</p>
+    <a href="{{ url_for('main.index') }}" class="btn btn-primary">返回首页</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,4 @@
+# file: /Users/chenguowen/ypjgjc/scraper/pipelines.py
+# hypothesis_version: 6.148.8
+
+['(?i)(?<!m)g(?!m)', '(?i)(?<!m)l(?!m)', '(?i)mg', '(?i)ml', '(\\d+\\.?\\d*)', 'L', '[¥￥元]', '\\s+', 'dosage_form', 'g', 'manufacturer', 'mg', 'ml', 'name', 'price', 'source_name', 'source_url', 'specification', '数据库连接已关闭', '数据库连接已建立', '缺少药品名称']
