@@ -60,6 +60,59 @@ class CategoryExtractor:
         
         try:
             async with async_playwright() as p:
+                # 启动浏览器
+                browser = await p.chromium.launch(
+                    headless=headless,
+                    args=['--no-sandbox', '--disable-dev-shm-usage']  # Cloud Run兼容性
+                )
+                
+                context = await browser.new_context(
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                )
+                
+                page = await context.new_page()
+                
+                # 设置请求拦截
+                await page.route('**/*', self._handle_route)
+                
+                # 访问详情页
+                detail_url = f'https://dian.ysbang.cn/goods/detail/{drug_id}'
+                
+                try:
+                    await page.goto(detail_url, timeout=timeout)
+                    await page.wait_for_load_state('networkidle', timeout=timeout)
+                    
+                    # 等待页面加载完成
+                    await asyncio.sleep(2)
+                    
+                    # 提取页面信息
+                    result.update(await self._extract_page_info(page))
+                    result['success'] = True
+                    
+                except Exception as e:
+                    logger.error(f"页面加载失败 {detail_url}: {e}")
+                    result['error'] = f"页面加载失败: {str(e)}"
+                
+                finally:
+                    await browser.close()
+                    
+        except Exception as e:
+            logger.error(f"提取类别失败 drug_id={drug_id}: {e}")
+            result['error'] = f"提取失败: {str(e)}"
+        
+        return result
+        result = {
+            'success': False,
+            'drug_id': drug_id,
+            'category': None,
+            'approval_number': None,
+            'detail': {},
+            'api_data': {},
+            'error': None
+        }
+        
+        try:
+            async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=headless)
                 context = await browser.new_context()
                 

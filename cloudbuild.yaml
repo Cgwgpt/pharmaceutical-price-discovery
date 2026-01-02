@@ -1,0 +1,45 @@
+# Google Cloud Build配置文件
+steps:
+  # 构建Docker镜像
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-f', 'Dockerfile.cloudrun',
+      '-t', 'gcr.io/$PROJECT_ID/pharmaceutical-price-discovery:$COMMIT_SHA',
+      '-t', 'gcr.io/$PROJECT_ID/pharmaceutical-price-discovery:latest',
+      '.'
+    ]
+
+  # 推送镜像到Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/pharmaceutical-price-discovery:$COMMIT_SHA']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/pharmaceutical-price-discovery:latest']
+
+  # 部署到Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args: [
+      'run', 'deploy', 'pharmaceutical-price-discovery',
+      '--image', 'gcr.io/$PROJECT_ID/pharmaceutical-price-discovery:$COMMIT_SHA',
+      '--region', 'asia-east1',
+      '--platform', 'managed',
+      '--allow-unauthenticated',
+      '--memory', '2Gi',
+      '--cpu', '2',
+      '--timeout', '900',
+      '--concurrency', '10',
+      '--max-instances', '5',
+      '--set-env-vars', 'FLASK_ENV=production,DATABASE_URL=sqlite:///tmp/pharma_prices.db'
+    ]
+
+# 镜像推送到Container Registry
+images:
+  - 'gcr.io/$PROJECT_ID/pharmaceutical-price-discovery:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/pharmaceutical-price-discovery:latest'
+
+# 构建选项
+options:
+  machineType: 'E2_HIGHCPU_8'
+  diskSizeGb: '100'
